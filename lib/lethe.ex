@@ -83,7 +83,6 @@ defmodule Lethe do
   @type matchspec() :: [matchspec_element()]
   @type compiled_query() :: {table(), matchspec(), limit(), lock()}
 
-  @mnesia_all_vars :"$_"
   @mnesia_specified_vars :"$$"
 
   typedstruct module: Query do
@@ -138,7 +137,7 @@ defmodule Lethe do
   end
 
   @spec compile(__MODULE__.Query.t()) :: compiled_query()
-  def compile(%__MODULE__.Query{table: table, ops: ops, fields: fields, select: select, lock: lock, limit: limit} = query) do
+  def compile(%__MODULE__.Query{table: table, ops: ops, fields: fields, select: select, lock: lock, limit: limit}) do
     # The spec is a list of matches. A match is defined as:
     #   source = {@table, :$1, :$2, ...}
     #   ops = [{:>, $1, 3}]
@@ -205,15 +204,6 @@ defmodule Lethe do
       :mnesia.select table, matchspec, limit, lock
     end)
     |> return_select_result_or_error
-  end
-
-  defp field_to_var(%__MODULE__.Query{fields: fields}, field) do
-    if Map.has_key?(fields, field) do
-      field_num = Map.get fields, field
-      :"$#{field_num}"
-    else
-      raise ArgumentError, "field '#{field}' not found in: #{inspect fields}"
-    end
   end
 
   defp return_select_result_or_error(mnesia_result) do

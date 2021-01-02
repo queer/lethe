@@ -93,7 +93,18 @@ defmodule LetheTest do
     end
 
     test "it selects non-adjacent fields" do
-      #
+      {:ok, [{int, map}]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select([:integer, :map])
+        |> Lethe.limit(1)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert is_integer(int)
+      assert int >= 0
+      assert is_map(map)
+      assert 1 == map_size(map)
     end
   end
 end
