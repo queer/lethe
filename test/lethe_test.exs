@@ -106,5 +106,17 @@ defmodule LetheTest do
       assert is_map(map)
       assert 1 == map_size(map)
     end
+
+    test "it selects many records" do
+      {:ok, results} =
+        @table
+        |> Lethe.new
+        |> Lethe.select_all
+        |> Lethe.limit(100)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 100 = length(results)
+    end
   end
 end
