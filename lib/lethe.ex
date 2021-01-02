@@ -1,19 +1,62 @@
 defmodule Lethe do
-  @moduledoc false
+  @moduledoc """
+  # Lethe
+
+  Lethe is a user-friendly query DSL for Mnesia. Currently, Lethe is focused on
+  providing a sane API for reads, but I might add support for writes later.
+  """
 
   use TypedStruct
 
+  ## Basic types for the query struct ##
+
+  @typedoc """
+  The name of the Mnesia table to query against
+  """
   @type table() :: atom()
-  @type result() :: atom()
-  @type results() :: [result()]
-  @type limit() :: :all | non_neg_integer()
-  @type lock() :: :read | :write
+
+  @typedoc """
+  The fields being returned by the query. These are the names of the fields,
+  not Mnesia's numeric selectors or anything of the like.
+  """
   @type field() :: atom()
 
+  @typedoc """
+  The limit of values to return. If the limit is `0`, it is converted to `:all`
+  internally.
+  """
+  @type limit() :: :all | non_neg_integer()
+
+  @typedoc """
+  The type of table lock to use.
+  """
+  @type lock() :: :read | :write
+
+  ## Mnesia transaction helpers ##
+
+  @typedoc """
+  A successful transaction result.
+  """
   @type transaction_success(res) :: {:ok, res}
+
+  @typedoc """
+  A failed transaction result. The inner term is the error returned by Mnesia.
+  """
   @type transaction_failure() :: {:error, {:transaction_aborted, term()}}
+
+  @typedoc """
+  A result of an Mnesia transaction.
+  """
   @type transaction(res) :: transaction_success(res) | transaction_failure()
 
+  ## Matchspec functions ##
+
+  @typedoc """
+  A boolean function that can be invoked in a matchspec. These functions are
+  used for operating on the values being queried over, such as:
+  - "is X a pid?"
+  - "is Y a key in X?"
+  """
   @type matchspec_bool_func() ::
     :is_atom
     | :is_float
@@ -71,6 +114,10 @@ defmodule Lethe do
     | :"/="
     | :self
 
+  ## Matchspec types ##
+
+  @type result() :: atom()
+  @type results() :: [result()]
   @type matchspec_any() :: :_
   @type matchspec_all() :: :"$$"
   @type matchspec_variable() :: result() | matchspec_any() | matchspec_all()
