@@ -12,6 +12,7 @@ defmodule Lethe.MixProject do
       deps: deps(),
 
       # Hex
+      description: "A friendly query DSL for Mnesia",
       package: [
         maintainers: ["amy"],
         links: %{"GitHub" => @repo_url},
