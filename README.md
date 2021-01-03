@@ -1,4 +1,8 @@
-# lethe
+# Lethe
+
+> Lethe
+> /ˈli θi/ • *noun* <sup><sup>(try it with [IPA Reader](http://ipa-reader.xyz))</sup></sup>
+> 1. *Classical Mythology.* A river in Hades whose water caused forgetfulness of the past in those who drank of it.
 
 A marginally-better (WIP) query DSL for Mnesia. Originally implemented for
 [신경](https://singyeong.org).

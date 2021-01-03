@@ -1,6 +1,6 @@
 defmodule Lethe do
   @moduledoc """
-  # Lethe
+  ## Lethe
 
   Lethe is a user-friendly query DSL for Mnesia. Currently, Lethe is focused on
   providing a sane API for reads, but I might add support for writes later.
@@ -8,7 +8,9 @@ defmodule Lethe do
 
   use TypedStruct
 
+  ######################################
   ## Basic types for the query struct ##
+  ######################################
 
   @typedoc """
   The name of the Mnesia table to query against
@@ -49,7 +51,9 @@ defmodule Lethe do
   """
   @type transaction(res) :: transaction_success(res) | transaction_failure()
 
+  #########################
   ## Matchspec functions ##
+  #########################
 
   @typedoc """
   A boolean function that can be invoked in a matchspec. These functions are
@@ -114,7 +118,9 @@ defmodule Lethe do
     | :"/="
     | :self
 
+  #####################
   ## Matchspec types ##
+  #####################
 
   @type result() :: atom()
   @type results() :: [result()]
@@ -130,7 +136,15 @@ defmodule Lethe do
   @type matchspec() :: [matchspec_element()]
   @type compiled_query() :: {table(), matchspec(), limit(), lock()}
 
+  ###############
+  ## Constants ##
+  ###############
+
   @mnesia_specified_vars :"$$"
+
+  #############
+  ## Structs ##
+  #############
 
   typedstruct module: Query do
     field :table, Lethe.table()
@@ -140,6 +154,10 @@ defmodule Lethe do
     field :lock, Lethe.lock()
     field :limit, Lethe.limit()
   end
+
+  #####################
+  ## Basic functions ##
+  #####################
 
   @spec new(table()) :: __MODULE__.Query.t()
   def new(table) do
@@ -169,7 +187,7 @@ defmodule Lethe do
   @spec select(__MODULE__.Query.t(), field() | [field()]) :: __MODULE__.Query.t()
   def select(%__MODULE__.Query{} = query, field) when is_atom(field), do: select(query, [field])
 
-  def select(%__MODULE__.Query{} = query, fields) when is_list(fields) do
+  def select(%__MODULE__.Query{} = query, [_ | _] = fields) do
     %{query | select: fields}
   end
 
@@ -184,7 +202,14 @@ defmodule Lethe do
   end
 
   @spec compile(__MODULE__.Query.t()) :: compiled_query()
-  def compile(%__MODULE__.Query{table: table, ops: ops, fields: fields, select: select, lock: lock, limit: limit}) do
+  def compile(%__MODULE__.Query{
+    table: table,
+    ops: ops,
+    fields: fields,
+    select: select,
+    lock: lock,
+    limit: limit,
+  } = query) do
     # The spec is a list of matches. A match is defined as:
     #   source = {@table, :$1, :$2, ...}
     #   ops = [{:>, $1, 3}]
@@ -220,12 +245,11 @@ defmodule Lethe do
           select
 
         [_ | _] when length(select) != map_size(fields) ->
-          [:"$$"]
+          [Enum.map(select, &field_to_var(query, &1))]
 
         _ ->
           select
       end
-      # select # Enum.map select, &field_to_var(query, &1)
 
     source = List.to_tuple [table | fields_as_vars]
     matchspec = [{source, ops, select_as_vars}]
@@ -252,6 +276,10 @@ defmodule Lethe do
     end)
     |> return_select_result_or_error
   end
+
+  #############
+  ## Helpers ##
+  #############
 
   defp return_select_result_or_error(mnesia_result) do
     case mnesia_result do
@@ -306,6 +334,25 @@ defmodule Lethe do
 
       {:aborted, reason} ->
         {:error, {:transaction_aborted, reason}}
+    end
+  end
+
+  defp field_to_var(%__MODULE__.Query{fields: fields}, field) do
+    if Map.has_key?(fields, field) do
+      field_num = Map.get fields, field
+      :"$#{field_num}"
+    else
+      raise ArgumentError, "field '#{field}' not found in: #{inspect fields}"
+    end
+  end
+
+  ###############
+  ## Operators ##
+  ###############
+
+  defmodule Ops do
+    def is_atom(%Lethe.Query{} = query, key) do
+      #
     end
   end
 end
