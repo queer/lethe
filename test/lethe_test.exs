@@ -182,14 +182,11 @@ defmodule LetheTest do
     end
 
     test "work when operator funcs used" do
-      query =
+      {:ok, [{integer, string}]} =
         @table
         |> Lethe.new
         |> Lethe.select([:integer, :string])
         |> Lethe.limit(1)
-
-      {:ok, [{integer, string}]} =
-        query
         |> Lethe.where(Ops.==(:integer, 5))
         |> Lethe.compile
         |> Lethe.run
@@ -197,6 +194,21 @@ defmodule LetheTest do
       assert 5 == integer
       assert is_binary(string)
       assert String.valid?(string)
+    end
+
+    test "work when many operators used" do
+      {:ok, res} =
+        @table
+        |> Lethe.new
+        |> Lethe.select([:integer])
+        |> Lethe.limit(:all)
+        |> Lethe.where(Ops.'=<'(Ops.*(:integer, 2), 10))
+        |> Lethe.compile
+        |> Lethe.run
+
+      # We can't guarantee term ordering, so it's necessary to sort the output
+      # first.
+      assert [1, 2, 3, 4, 5] == Enum.sort(res)
     end
   end
 end
