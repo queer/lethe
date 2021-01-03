@@ -14,9 +14,9 @@ defmodule Lethe do
   use TypedStruct
   alias Lethe.{Ops, Utils}
 
-  ######################################
-  ## Basic types for the query struct ##
-  ######################################
+  #############################################
+  ## Basic types for the query functionality ##
+  #############################################
 
   @typedoc """
   The name of the Mnesia table to query against
@@ -56,6 +56,11 @@ defmodule Lethe do
   A result of an Mnesia transaction.
   """
   @type transaction(res) :: transaction_success(res) | transaction_failure()
+
+  @typedoc """
+  An Elixir expression. Used for `where` clauses.
+  """
+  @type expression() :: term()
 
   #########################
   ## Matchspec functions ##
@@ -419,31 +424,53 @@ defmodule Lethe do
   ## Operators ##
   ###############
 
-  # is_funcs / transform_funcs
-  @spec where(__MODULE__.Query.t(), matchspec_guard_func(), field_or_guard()) :: __MODULE__.Query.t()
-  def where(%__MODULE__.Query{ops: ops} = query, op, key) do
-    if MapSet.member?(Ops.is_funcs(), op) or MapSet.member?(Ops.transform_funcs(), op) do
-      out = apply Ops, op, [key]
-      %{query | ops: ops ++ [out]}
-    else
-      raise ArgumentError, "lethe: unknown op: #{inspect op}"
+  @spec where(__MODULE__.Query.t(), expression()) :: __MODULE__.Query.t()
+  defmacro where(query, operation) do
+    with {op, args} when is_atom(op) and is_list(args) <- Lethe.AstTransformer.__rewrite_into_quotable_form(operation) do
+      args = Enum.map args, &Lethe.AstTransformer.__rewrite_into_quotable_form/1
+      quote do
+        rewritten_op = Lethe.AstTransformer.__rewrite_op unquote(op)
+        transformed_args = Enum.map unquote(args), &Lethe.AstTransformer.__transform_op(unquote(query), &1)
+        guard = apply Ops, rewritten_op, transformed_args
+        %{unquote(query) | ops: unquote(query).ops ++ [guard]}
+      end
     end
   end
 
-  # operator_funcs
-  @spec where(__MODULE__.Query.t(), matchspec_guard_func(), field_or_guard() | term(), field_or_guard() | term()) :: __MODULE__.Query.t()
-  def where(%__MODULE__.Query{ops: ops} = query, op, left, right) do
-    if MapSet.member?(op, Ops.operator_funcs()) do
-      out = apply Ops, op, [left, right]
-      %{query | ops: ops ++ [out]}
-    else
-      raise ArgumentError, "lethe: unknown op: #{inspect op}"
-    end
-  end
+  defmodule AstTransformer do
+    alias Lethe.Ops
 
-  # Anything else (constant_funcs, logical_funcs)
-  @spec where(__MODULE__.Query.t(), matchspec_guard()) :: __MODULE__.Query.t()
-  def where(%__MODULE__.Query{ops: ops} = query, matchspec) do
-    %{query | ops: ops ++ [matchspec]}
+    def __rewrite_into_quotable_form(op) do
+      case op do
+        {op, meta, args} when is_list(meta) ->
+          {op, args}
+
+        _ ->
+          op
+      end
+    end
+
+    def __transform_op(query, op) do
+      cond do
+        is_tuple(op) ->
+          {op, args} = op
+          apply Ops, __MODULE__.__rewrite_op(op), Enum.map(args, &__MODULE__.__transform_op(query, &1))
+
+        is_atom(op) ->
+          __MODULE__.__rewrite_op op
+
+        true ->
+          op
+      end
+    end
+
+    def __rewrite_op(op) when is_atom(op) do
+      case op do
+        :"<=" -> :"=<"
+        :and -> :andalso
+        :or -> :orelse
+        _ -> op
+      end
+    end
   end
 end

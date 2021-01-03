@@ -1,6 +1,5 @@
 defmodule LetheTest do
   use ExUnit.Case
-  alias Lethe.Ops
   doctest Lethe
 
   @table :table
@@ -132,31 +131,14 @@ defmodule LetheTest do
     end
   end
 
-  describe "op functions" do
-    test "work when constructed via atom" do
-      {:ok, [{integer, string}]} =
-        @table
-        |> Lethe.new
-        |> Lethe.select([:integer, :string])
-        |> Lethe.where(:is_integer, :integer)
-        |> Lethe.where(:is_binary, :string)
-        |> Lethe.limit(1)
-        |> Lethe.compile
-        |> Lethe.run
-
-      assert is_integer(integer)
-      assert integer >= 0
-      assert is_binary(string)
-      assert String.valid?(string)
-    end
-
-    test "work when passed as matchspecs" do
+  describe "where/2" do
+    test "it handles is-functions correctly" do
       {:ok, [integer]} =
         @table
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.limit(1)
-        |> Lethe.where(Ops.is_integer(:integer))
+        |> Lethe.where(is_integer(:integer))
         |> Lethe.compile
         |> Lethe.run
 
@@ -164,16 +146,13 @@ defmodule LetheTest do
       assert integer >= 0
     end
 
-    test "work when passed as args to logical funcs" do
-      query =
+    test "it handles logical functions correctly" do
+      {:ok, [integer]} =
         @table
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.limit(1)
-
-      {:ok, [integer]} =
-        query
-        |> Lethe.where(Ops.andalso(Ops.is_integer(:integer), Ops.is_binary(:string)))
+        |> Lethe.where(is_integer(:integer) and is_binary(:string))
         |> Lethe.compile
         |> Lethe.run
 
@@ -181,13 +160,12 @@ defmodule LetheTest do
       assert integer >= 0
     end
 
-    test "work when operator funcs used" do
+    test "it handles comparison functions correctly" do
       {:ok, [{integer, string}]} =
         @table
         |> Lethe.new
         |> Lethe.select([:integer, :string])
-        |> Lethe.limit(1)
-        |> Lethe.where(Ops.==(:integer, 5))
+        |> Lethe.where(:integer == 5)
         |> Lethe.compile
         |> Lethe.run
 
@@ -202,7 +180,7 @@ defmodule LetheTest do
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.limit(:all)
-        |> Lethe.where(Ops.'=<'(Ops.*(:integer, 2), 10))
+        |> Lethe.where(:integer * 2 <= 10)
         |> Lethe.compile
         |> Lethe.run
 
@@ -211,27 +189,27 @@ defmodule LetheTest do
       assert [1, 2, 3, 4, 5] == Enum.sort(res)
     end
 
-    test "map_size operator works" do
+    test "it handles map_size properly" do
       {:ok, [map]} =
         @table
         |> Lethe.new
         |> Lethe.select(:map)
         |> Lethe.limit(1)
-        |> Lethe.where(Ops.==(Ops.map_size(:map), 1))
+        |> Lethe.where(map_size(:map) == 1)
         |> Lethe.compile
         |> Lethe.run
 
       assert 1 == map_size(map)
     end
 
-    test "complex operations like is_map_key work" do
+    test "it handles is_map_key properly" do
       {:ok, [{integer, map}]} =
         @table
         |> Lethe.new
         |> Lethe.select([:integer, :map])
         |> Lethe.limit(1)
-        |> Lethe.where(Ops.==(:integer, 1))
-        |> Lethe.where(Ops.is_map_key(1, :map))
+        |> Lethe.where(:integer == 1)
+        |> Lethe.where(is_map_key(1, :map))
         |> Lethe.compile
         |> Lethe.run
 
