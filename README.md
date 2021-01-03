@@ -17,14 +17,15 @@ change in the future.
 - [x] Select all fields of a record
 - [x] Select some fields of a record
 - [x] Limit number of records returned
-- [ ] Query operators
-  - [ ] `+`, `-`, `*`, `div`, `rem`, `>`, `>=`, `<`, `<=`, `!=`
-  - [ ] Bitwise operators
-  - [ ] Tuple, list, and map operators (`map_size`, `hd`, `tl`, `element`, etc.)
-  - [ ] Misc. math functions (`abs`, `trunc`, etc.)
-  - [ ] Boolean operators
-    - [ ] Logical AND/OR/etc.
-    - [ ] `is_pid`/`is_binary`/etc.
+- [x] Query operators
+  - [x] `+`, `-`, `*`, `div`, `rem`, `>`, `>=`, `<`, `<=`, `!=`
+  - [x] Bitwise operators
+  - [x] Tuple, list, and map operators (`map_size`, `hd`, `tl`, `element`, etc.)
+  - [x] Misc. math functions (`abs`, `trunc`, etc.)
+  - [x] Boolean operators
+    - [x] Logical AND/OR/etc.
+    - [x] `is_pid`/`is_binary`/etc.
+- [ ] Write DSL
 
 ## Installation
 
@@ -67,6 +68,14 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   |> Lethe.compile
   |> Lethe.run
 
+# Select all  fields from all records
+# `Lethe.select_all` and `Lethe.limit(:all)` are the default settings.
+{:ok, all_records} =
+  table
+  |> Lethe.new
+  |> Lethe.compile
+  |> Lethe.run
+
 # Select a single field from a single record
 {:ok, [integer]} =
   table
@@ -81,7 +90,6 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   table
   |> Lethe.new
   |> Lethe.limit(100)
-  |> Lethe.select_all
   |> Lethe.compile
   |> Lethe.run
 
@@ -93,4 +101,32 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   |> Lethe.select([:integer, :map])
   |> Lethe.compile
   |> Lethe.run
+
+# Now let's use some operators!
+alias Lethe.Ops
+
+# Select all values where :integer * 2 <= 10
+{:ok, res} =
+  table
+  |> Lethe.new
+  |> Lethe.select(:integer)
+  |> Lethe.where(Ops.'=<'(Ops.*(:integer, 2), 10))
+  |> Lethe.compile
+  |> Lethe.run
+
+# Or a bit cleaner
+where_clause =
+  :integer
+  |> Ops.*(2)
+  |> Ops.'=<'(10)
+  
+{:ok, res} =
+  table
+  |> Lethe.new
+  |> Lethe.select(:integer)
+  |> Lethe.where(where_clause)
+  |> Lethe.compile
+  |> Lethe.run
+
+# See `Lethe.Ops` for a list of all available ops
 ```

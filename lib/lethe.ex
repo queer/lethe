@@ -4,6 +4,11 @@ defmodule Lethe do
 
   Lethe is a user-friendly query DSL for Mnesia. Currently, Lethe is focused on
   providing a sane API for reads, but I might add support for writes later.
+
+  The default options are:
+  - Select all fields (`Lethe.select_all`)
+  - Read lock (`:read`)
+  - Select all values (`Lethe.limit(:all)`)
   """
 
   use TypedStruct
