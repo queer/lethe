@@ -151,16 +151,12 @@ defmodule LetheTest do
     end
 
     test "work when passed as matchspecs" do
-      query =
+      {:ok, [integer]} =
         @table
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.limit(1)
-
-      query = Lethe.where query, Ops.is_integer(query, :integer)
-
-      {:ok, [integer]} =
-        query
+        |> Lethe.where(Ops.is_integer(:integer))
         |> Lethe.compile
         |> Lethe.run
 
@@ -177,7 +173,7 @@ defmodule LetheTest do
 
       {:ok, [integer]} =
         query
-        |> Lethe.where(Ops.andalso(Ops.is_integer(query, :integer), Ops.is_binary(query, :string)))
+        |> Lethe.where(Ops.andalso(Ops.is_integer(:integer), Ops.is_binary(:string)))
         |> Lethe.compile
         |> Lethe.run
 
@@ -194,7 +190,7 @@ defmodule LetheTest do
 
       {:ok, [{integer, string}]} =
         query
-        |> Lethe.where(Ops.==(query, :integer, 5))
+        |> Lethe.where(Ops.==(:integer, 5))
         |> Lethe.compile
         |> Lethe.run
 
