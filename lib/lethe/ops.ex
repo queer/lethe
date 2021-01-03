@@ -26,7 +26,6 @@ defmodule Lethe.Ops do
     :is_reference,
     :is_tuple,
     :is_map,
-    :map_is_key,
     :is_binary,
     :is_function,
     # TODO: This can't actually be defined as a function, how to fix?
@@ -74,6 +73,7 @@ defmodule Lethe.Ops do
     :==,
     :"=/=",
     :"/=",
+    :map_is_key,
   ]
 
   @constant_funcs [
