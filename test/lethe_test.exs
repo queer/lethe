@@ -1,5 +1,6 @@
 defmodule LetheTest do
   use ExUnit.Case
+  alias Lethe.Ops
   doctest Lethe
 
   @table :table
@@ -117,6 +118,89 @@ defmodule LetheTest do
         |> Lethe.run
 
       assert 100 = length(results)
+    end
+
+    test "it selects everything correctly" do
+      {:ok, results} =
+        @table
+        |> Lethe.new
+        |> Lethe.select_all
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 10_000 == length(results)
+    end
+  end
+
+  describe "op functions" do
+    test "work when constructed via atom" do
+      {:ok, [{integer, string}]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select([:integer, :string])
+        |> Lethe.where(:is_integer, :integer)
+        |> Lethe.where(:is_binary, :string)
+        |> Lethe.limit(1)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert is_integer(integer)
+      assert integer >= 0
+      assert is_binary(string)
+      assert String.valid?(string)
+    end
+
+    test "work when passed as matchspecs" do
+      query =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.limit(1)
+
+      query = Lethe.where query, Ops.is_integer(query, :integer)
+
+      {:ok, [integer]} =
+        query
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert is_integer(integer)
+      assert integer >= 0
+    end
+
+    test "work when passed as args to logical funcs" do
+      query =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.limit(1)
+
+      {:ok, [integer]} =
+        query
+        |> Lethe.where(Ops.andalso(Ops.is_integer(query, :integer), Ops.is_binary(query, :string)))
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert is_integer(integer)
+      assert integer >= 0
+    end
+
+    test "work when operator funcs used" do
+      query =
+        @table
+        |> Lethe.new
+        |> Lethe.select([:integer, :string])
+        |> Lethe.limit(1)
+
+      {:ok, [{integer, string}]} =
+        query
+        |> Lethe.where(Ops.==(query, :integer, 5))
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 5 == integer
+      assert is_binary(string)
+      assert String.valid?(string)
     end
   end
 end

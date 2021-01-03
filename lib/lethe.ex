@@ -7,6 +7,7 @@ defmodule Lethe do
   """
 
   use TypedStruct
+  alias Lethe.Utils
 
   ######################################
   ## Basic types for the query struct ##
@@ -126,9 +127,19 @@ defmodule Lethe do
   @type results() :: [result()]
   @type matchspec_any() :: :_
   @type matchspec_all() :: :"$$"
-  @type matchspec_variable() :: result() | matchspec_any() | matchspec_all()
-  @type matchspec_guard() :: {matchspec_guard_func()} | {matchspec_guard_func(), matchspec_condition(), term()}
+  @type matchspec_variable() ::
+    result()
+    | matchspec_any()
+    | matchspec_all()
+
+  @type matchspec_guard() ::
+    {matchspec_guard_func()}
+    | {matchspec_guard_func(), matchspec_variable()}
+    | {matchspec_guard_func(), matchspec_condition(), matchspec_condition()}
+    | {matchspec_guard_func(), matchspec_condition(), term()}
+
   @type matchspec_condition() :: matchspec_variable() | matchspec_guard()
+
   @typedoc """
   The first `tuple()` is a `{table(), result() | matchspec_any(), ...}`
   """
@@ -141,6 +152,64 @@ defmodule Lethe do
   ###############
 
   @mnesia_specified_vars :"$$"
+
+  @boolean_functions [
+    :is_atom,
+    :is_float,
+    :is_integer,
+    :is_list,
+    :is_number,
+    :is_pid,
+    :is_port,
+    :is_reference,
+    :is_tuple,
+    :is_map,
+    :map_is_key,
+    :is_binary,
+    :is_function,
+    :is_record,
+    :and,
+    :or,
+    :not,
+    :xor,
+    :andalso,
+    :orelse,
+  ]
+
+  @guard_functions MapSet.new @boolean_functions ++ [
+    :abs,
+    :element,
+    :hd,
+    :length,
+    :map_get,
+    :map_size,
+    :node,
+    :round,
+    :size,
+    :bit_size,
+    :tl,
+    :trunc,
+    :+,
+    :-,
+    :*,
+    :div,
+    :rem,
+    :band,
+    :bor,
+    :bxor,
+    :bnot,
+    :bsl,
+    :bsr,
+    :>,
+    :>=,
+    :<,
+    :"=<",
+    :"=:=",
+    :==,
+    :"=/=",
+    :"/=",
+    :self,
+  ]
 
   #############
   ## Structs ##
@@ -220,18 +289,29 @@ defmodule Lethe do
     # - :$_ is a select-all
     # - :$$ is a select-all-in-match-head
 
+    # Sometimes, we have fields being used in guards but not explicitly named
+    # as part of the select, due to, say, not wanting them returned but still
+    # wanting them to be queried on. We deal with this by recursively scanning
+    # through all the guard tuples for any variable binds, then comparing them
+    # to the ones we're selecting on. If a variable is selected OR bound by a
+    # guard, then it's added to the match head so we can match on it properly.
+    # This respects the fields the user wants returned (from `select/2`) while
+    # still working correctly.
+    guard_binds = search_for_bound_variables ops
+
     fields_as_vars =
       fields
       |> Enum.sort_by(&elem(&1, 1))
       |> Enum.map(fn {field, index} ->
         all? = select == [@mnesia_specified_vars]
         selected? = field in select
+        guard_bind? = MapSet.member? guard_binds, :"$#{index}"
 
         cond do
-          not all? and selected? ->
+          not all? and (selected? or guard_bind?) ->
             :"$#{index}"
 
-          not all? and not selected? ->
+          not all? and not selected? and not guard_bind? ->
             :_
 
           all? ->
@@ -245,7 +325,7 @@ defmodule Lethe do
           select
 
         [_ | _] when length(select) != map_size(fields) ->
-          [Enum.map(select, &field_to_var(query, &1))]
+          [Enum.map(select, &Utils.field_to_var(query, &1))]
 
         _ ->
           select
@@ -326,6 +406,17 @@ defmodule Lethe do
 
         {:ok, out}
 
+      {:atomic, [_ | _] = match} ->
+        out =
+          match
+          |> Enum.map(fn
+            [x | []] -> x
+            x when is_list(x) -> List.to_tuple x
+            x -> x
+          end)
+
+        {:ok, out}
+
       {:atomic, []} ->
         {:ok, []}
 
@@ -337,12 +428,54 @@ defmodule Lethe do
     end
   end
 
-  defp field_to_var(%__MODULE__.Query{fields: fields}, field) do
-    if Map.has_key?(fields, field) do
-      field_num = Map.get fields, field
-      :"$#{field_num}"
-    else
-      raise ArgumentError, "field '#{field}' not found in: #{inspect fields}"
+  defp search_for_bound_variables(guards) when is_list(guards) do
+    # Given a list of guards, recursively search for any and all bound
+    # variables. This makes it easier to preserve a clean syntax, not need to
+    # use macros, and still be able to ensure everything is properly bound.
+    guards
+    |> Enum.map(&search_guard/1)
+    |> Enum.reduce(MapSet.new(), fn set, acc ->
+      MapSet.union acc, set
+    end)
+  end
+
+  defp search_guard(tuple) do
+    tuple
+    |> Tuple.to_list
+    |> Enum.reduce(MapSet.new(), fn elem, vars ->
+      cond do
+        is_atom(elem) ->
+          elem
+          |> Atom.to_string
+          |> String.match?(~r/\$\d+/)
+          |> if do
+            MapSet.put vars, elem
+          else
+            vars
+          end
+
+        is_tuple(elem) ->
+          MapSet.union vars, search_guard(elem)
+
+        true ->
+          vars
+      end
+    end)
+  end
+
+  defmodule Utils do
+    @moduledoc """
+    Functions that need to be public to function across modules.
+
+    NOT INTENDED FOR EXTERNAL CONSUMPTION.
+    """
+    def field_to_var(%Lethe.Query{fields: fields}, field) do
+      if Map.has_key?(fields, field) do
+        field_num = Map.get fields, field
+        :"$#{field_num}"
+      else
+        raise ArgumentError, "field '#{field}' not found in: #{inspect fields}"
+      end
     end
   end
 
@@ -350,9 +483,137 @@ defmodule Lethe do
   ## Operators ##
   ###############
 
+  @spec where(__MODULE__.Query.t(), matchspec_guard_func(), field()) :: __MODULE__.Query.t()
+  def where(%__MODULE__.Query{ops: ops} = query, op, key) do
+    if MapSet.member?(@guard_functions, op) do
+      # Run the op function
+      out = apply Lethe.Ops, op, [query, key]
+      %{query | ops: ops ++ [out]}
+    else
+      raise ArgumentError, "lethe: unknown op: #{inspect op}"
+    end
+  end
+
+  @spec where(__MODULE__.Query.t(), matchspec_guard()) :: __MODULE__.Query.t()
+  def where(%__MODULE__.Query{ops: ops} = query, matchspec) do
+    %{query | ops: ops ++ [matchspec]}
+  end
+
   defmodule Ops do
-    def is_atom(%Lethe.Query{} = query, key) do
-      #
+    alias Lethe.Utils
+
+    @is_funcs [
+      :is_atom,
+      :is_float,
+      :is_integer,
+      :is_list,
+      :is_number,
+      :is_pid,
+      :is_port,
+      :is_reference,
+      :is_tuple,
+      :is_map,
+      :map_is_key,
+      :is_binary,
+      :is_function,
+      # TODO: This can't actually be defined as a function, how to fix?
+      # :is_record,
+    ]
+
+    @logical_funcs [
+      :andalso,
+      :orelse,
+      :not,
+      :xor,
+    ]
+
+    @transform_funcs [
+      :abs,
+      :element,
+      :hd,
+      :length,
+      :map_get,
+      :map_size,
+      :round,
+      :size,
+      :bit_size,
+      :tl,
+      :trunc,
+    ]
+
+    @operator_funcs [
+      :+,
+      :-,
+      :*,
+      :div,
+      :rem,
+      :band,
+      :bor,
+      :bxor,
+      :bnot,
+      :bsl,
+      :bsr,
+      :>,
+      :>=,
+      :<,
+      :"=<",
+      :"=:=",
+      :==,
+      :"=/=",
+      :"/=",
+    ]
+
+    @constant_funcs [
+      :node,
+      :self,
+    ]
+
+    for f <- @is_funcs do
+      @spec unquote(f)(Lethe.Query.t(), Lethe.field()) :: Lethe.matchspec_guard()
+      def unquote(f)(%Lethe.Query{} = query, key) when is_atom(key) do
+        {unquote(f), Utils.field_to_var(query, key)}
+      end
+    end
+
+    for f <- @logical_funcs do
+      @spec unquote(f)(Lethe.matchspec_guard(), Lethe.matchspec_guard()) :: Lethe.matchspec_guard
+      def unquote(f)(left, right) do
+        {unquote(f), left, right}
+      end
+    end
+
+    for f <- @transform_funcs do
+      @spec unquote(f)(Lethe.Query.t(), Lethe.field() | Lethe.matchspec_guard) :: Lethe.matchspec_guard()
+      def unquote(f)(%Lethe.Query{} = query, field_or_guard) do
+        {unquote(f), coerce(query, field_or_guard)}
+      end
+    end
+
+    for f <- @operator_funcs do
+      @spec unquote(f)(Lethe.Query.t(), Lethe.field() | Lethe.matchspec_guard(), Lethe.field | Lethe.matchspec_guard()) :: Lethe.matchspec_guard
+      def unquote(f)(%Lethe.Query{} = query, left, right) do
+        {unquote(f), coerce(query, left), coerce(query, right)}
+      end
+    end
+
+    for f <- @constant_funcs do
+      @spec unquote(f)() :: Lethe.matchspec_guard()
+      def unquote(f)() do
+        {unquote(f)}
+      end
+    end
+
+    defp coerce(query, field_or_guard) do
+      cond do
+        is_atom(field_or_guard) ->
+          Utils.field_to_var query, field_or_guard
+
+        is_tuple(field_or_guard) ->
+          field_or_guard
+
+        true ->
+          field_or_guard
+      end
     end
   end
 end
