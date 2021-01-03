@@ -89,35 +89,35 @@ defmodule Lethe.Ops do
   def constant_funcs, do: MapSet.new @constant_funcs
 
   for f <- @is_funcs do
-    @spec unquote(f)(Lethe.field()) :: Lethe.matchspec_guard()
+    # @spec unquote(f)(Lethe.field()) :: Lethe.matchspec_guard()
     def unquote(f)(key) do
       {unquote(f), key}
     end
   end
 
   for f <- @logical_funcs do
-    @spec unquote(f)(Lethe.matchspec_guard(), Lethe.matchspec_guard()) :: Lethe.matchspec_guard
+    # @spec unquote(f)(Lethe.matchspec_guard(), Lethe.matchspec_guard()) :: Lethe.matchspec_guard
     def unquote(f)(left, right) do
       {unquote(f), left, right}
     end
   end
 
   for f <- @transform_funcs do
-    @spec unquote(f)(Lethe.field() | Lethe.matchspec_guard) :: Lethe.matchspec_guard()
+    # @spec unquote(f)(Lethe.field() | Lethe.matchspec_guard) :: Lethe.matchspec_guard()
     def unquote(f)(value) do
       {unquote(f), value}
     end
   end
 
   for f <- @operator_funcs do
-    @spec unquote(f)(Lethe.field() | Lethe.matchspec_guard(), Lethe.field | Lethe.matchspec_guard()) :: Lethe.matchspec_guard
+    # @spec unquote(f)(Lethe.field() | Lethe.matchspec_guard(), Lethe.field | Lethe.matchspec_guard()) :: Lethe.matchspec_guard
     def unquote(f)(left, right) do
       {unquote(f), left, right}
     end
   end
 
   for f <- @constant_funcs do
-    @spec unquote(f)() :: Lethe.matchspec_guard()
+    # @spec unquote(f)() :: Lethe.matchspec_guard()
     def unquote(f)() do
       {unquote(f)}
     end
