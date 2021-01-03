@@ -10,9 +10,9 @@ defmodule Lethe.Ops do
     is_reference: 1,
     is_tuple: 1,
     is_map: 1,
-    map_is_key: 2,
+    is_map_key: 2,
     is_binary: 1,
-    is_function: 1
+    is_function: 1,
   ]
 
   @is_funcs [
@@ -73,7 +73,7 @@ defmodule Lethe.Ops do
     :==,
     :"=/=",
     :"/=",
-    :map_is_key,
+    :is_map_key,
   ]
 
   @constant_funcs [

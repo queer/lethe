@@ -14,7 +14,7 @@ defmodule LetheTest do
     :mnesia.add_table_index @table, :map
 
     for i <- 1..10_000 do
-      :mnesia.dirty_write {@table, i, "#{n()}", %{n() => "#{n()}"}}
+      :mnesia.dirty_write {@table, i, "#{n()}", %{i => "#{n()}"}}
     end
 
     on_exit fn ->
@@ -200,7 +200,7 @@ defmodule LetheTest do
       {:ok, res} =
         @table
         |> Lethe.new
-        |> Lethe.select([:integer])
+        |> Lethe.select(:integer)
         |> Lethe.limit(:all)
         |> Lethe.where(Ops.'=<'(Ops.*(:integer, 2), 10))
         |> Lethe.compile
@@ -209,6 +209,35 @@ defmodule LetheTest do
       # We can't guarantee term ordering, so it's necessary to sort the output
       # first.
       assert [1, 2, 3, 4, 5] == Enum.sort(res)
+    end
+
+    test "map_size operator works" do
+      {:ok, [map]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:map)
+        |> Lethe.limit(1)
+        |> Lethe.where(Ops.==(Ops.map_size(:map), 1))
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 1 == map_size(map)
+    end
+
+    test "complex operations like is_map_key work" do
+      {:ok, [{integer, map}]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select([:integer, :map])
+        |> Lethe.limit(1)
+        |> Lethe.where(Ops.==(:integer, 1))
+        |> Lethe.where(Ops.is_map_key(1, :map))
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 1 == integer
+      assert 1 == map_size(map)
+      assert Map.has_key?(map, 1)
     end
   end
 end
