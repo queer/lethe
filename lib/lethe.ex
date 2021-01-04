@@ -12,7 +12,7 @@ defmodule Lethe do
   """
 
   use TypedStruct
-  alias Lethe.{Ops, Utils}
+  alias Lethe.Ops
 
   #############################################
   ## Basic types for the query functionality ##
@@ -170,6 +170,30 @@ defmodule Lethe do
   #############
 
   typedstruct module: Query do
+    @moduledoc """
+    A Lethe query. Queries are what Lethe transforms into Mnesia-compatible
+    matchspecs for processing. A query is constructed from nothing but a table
+    name, provided to `Lethe.new/1`. Queries have sane defaults:
+
+    - Return all fields
+    - Read lock
+    - Return all matches
+
+    Queries can be updated with several functions:
+
+    - `Lethe.where/2`: Add a constraint to the query, like a `WHERE` clause in
+      SQL.
+    - `Lethe.limit/2`: Limit the number of results returned by the query.
+    - `Lethe.select/2`: Choose the specific fields returned by the query.
+    - `Lethe.select_all/1`: Choose to return all fields.
+
+    When you're finished creating a query, you must then compile it with
+    `Lethe.compile/1`, which converts the query into a form that can be passed
+    to Mnesia. Copmiled queries can be executed with `Lethe.run/1`; while it is
+    possible to take the output from `Lethe.compile/1` and run it manually,
+    doing so is not advised.
+    """
+
     field :table, Lethe.table()
     field :ops, [Lethe.matchspec_condition()]
     field :fields, %{required(Lethe.field()) => non_neg_integer()}
@@ -182,6 +206,10 @@ defmodule Lethe do
   ## Basic functions ##
   #####################
 
+  @doc """
+  Create a new query on the specified table. The names of the table attributes
+  will be automatically loaded.
+  """
   @spec new(table()) :: __MODULE__.Query.t()
   def new(table) do
     keys = :mnesia.table_info table, :attributes
@@ -202,11 +230,19 @@ defmodule Lethe do
     }
   end
 
+  @doc """
+  Select all fields from the table. This is essentially Mnesia's `:"$$"`
+  selector.
+  """
   @spec select_all(__MODULE__.Query.t()) :: __MODULE__.Query.t()
   def select_all(%__MODULE__.Query{} = query) do
     %{query | select: [@mnesia_specified_vars]}
   end
 
+  @doc """
+  List specific fields to be selected from the table. Either a single atom or a
+  list of atoms may be provided.
+  """
   @spec select(__MODULE__.Query.t(), field() | [field()]) :: __MODULE__.Query.t()
   def select(%__MODULE__.Query{} = query, field) when is_atom(field), do: select(query, [field])
 
@@ -214,7 +250,11 @@ defmodule Lethe do
     %{query | select: fields}
   end
 
-  # TODO: Document that limit=0 == limit=:all
+  @doc """
+  Limit the number of results returned. The number is a non-negative integer,
+  or the special atom `:all` to indicate all results being returned. Providing
+  a limit of `0` is functionally equivalent to providing a limit of `:all`.
+  """
   @spec limit(__MODULE__.Query.t(), limit()) :: __MODULE__.Query.t()
   def limit(%__MODULE__.Query{} = query, :all) do
     %{query | limit: :all}
@@ -224,6 +264,10 @@ defmodule Lethe do
     %{query | limit: limit}
   end
 
+  @doc """
+  Compiles the query into a tuple containing all the information needed to run
+  it against an Mnesia database.
+  """
   @spec compile(__MODULE__.Query.t()) :: compiled_query()
   def compile(%__MODULE__.Query{
     table: table,
@@ -278,7 +322,7 @@ defmodule Lethe do
           select
 
         [_ | _] when Kernel.length(select) != map_size(fields) ->
-          [Enum.map(select, &Utils.field_to_var(query, &1))]
+          [Enum.map(select, &field_to_var(query, &1))]
 
         _ ->
           select
@@ -295,6 +339,9 @@ defmodule Lethe do
     end
   end
 
+  @doc """
+  Runs the query against Mnesia, ensuring that results are properly limited.
+  """
   @spec run(compiled_query()) :: transaction(term())
   def run({table, matchspec, :all, lock}) do
     :mnesia.transaction(fn ->
@@ -401,7 +448,7 @@ defmodule Lethe do
         cond do
           is_atom(elem) ->
             try do
-              bind = Utils.field_to_var query, elem
+              bind = field_to_var query, elem
               {MapSet.put(vars, bind), out ++ [bind]}
             rescue
               _ ->
@@ -420,10 +467,38 @@ defmodule Lethe do
     {vars, List.to_tuple(out)}
   end
 
+  def field_to_var(%Lethe.Query{fields: fields}, field) do
+    if Map.has_key?(fields, field) do
+      field_num = Map.get fields, field
+      :"$#{field_num}"
+    else
+      raise ArgumentError, "field '#{field}' not found in: #{inspect fields}"
+    end
+  end
+
   ###############
   ## Operators ##
   ###############
 
+  @doc """
+  Adds a guard to the query. Guards are roughly analogous to `WHERE` clauses in
+  SQL, but can operate on all the Elixir data types. Instead of needing to
+  write out guards yourself, or suffer through the scary mess defined in
+  `Lethe.Ops`, you can instead just write normal Elixir in your `where` calls,
+  and Lethe will convert them into guard form. For example:
+
+      # ...
+      |> Lethe.where(:field_name * 2 <= 10)
+      |> Lethe.where(:field_two == 7 and :field_three != "test")
+      # ...
+
+  Lethe `where` expressions are normal Elixir code. Some operators are
+  rewritten from Elixir form to Mnesia form at compile time; for example,
+  Elixir's `and` operator is rewritten to an `:andalso` Mnesia guard.
+
+  A list of all available functions can be found here:
+  https://erlang.org/doc/apps/erts/match_spec.html#grammar
+  """
   @spec where(__MODULE__.Query.t(), expression()) :: __MODULE__.Query.t()
   defmacro where(query, operation) do
     with {op, args} when is_atom(op) and is_list(args) <- Lethe.AstTransformer.__rewrite_into_quotable_form(operation) do

@@ -1,4 +1,8 @@
 defmodule Lethe.Ops do
+  @moduledoc """
+  Auto-generated Mnesia guard helpers. YOU DO NOT WANT TO USE THIS MODULE EVER.
+  """
+
   import Kernel, except: [
     is_atom: 1,
     is_float: 1,
