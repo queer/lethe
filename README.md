@@ -103,30 +103,24 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   |> Lethe.run
 
 # Now let's use some operators!
-alias Lethe.Ops
+# Lethe internally rewrites all of these expressions into Mnesia guard form.
 
 # Select all values where :integer * 2 <= 10
 {:ok, res} =
   table
   |> Lethe.new
   |> Lethe.select(:integer)
-  |> Lethe.where(Ops.'=<'(Ops.*(:integer, 2), 10))
+  |> Lethe.where(:integer * 2 <= 10)
   |> Lethe.compile
   |> Lethe.run
 
-# Or a bit cleaner
-where_clause =
-  :integer
-  |> Ops.*(2)
-  |> Ops.'=<'(10)
-  
 {:ok, res} =
   table
   |> Lethe.new
   |> Lethe.select(:integer)
-  |> Lethe.where(where_clause)
+  |> Lethe.where(:integer * 2 >= 4 and :integer * 2 <= 10)
   |> Lethe.compile
   |> Lethe.run
 
-# See `Lethe.Ops` for a list of all available ops
+# See the documentation on `Lethe.where/2` for a list of all available ops
 ```
