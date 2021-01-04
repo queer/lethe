@@ -12,6 +12,11 @@ Matchspecs suck, so this is a sorta-better alternative.
 **WARNING:** Currently, only read operations are supported. This may or may not
 change in the future.
 
+### Things that may trip you up
+
+- The map functions `is_map_key` and `map_get` take arguments in the order
+  `(key, map)`, NOT `(map, key)`!
+
 ## Roadmap
 
 - [x] Select all fields of a record
@@ -49,7 +54,7 @@ table = :table
 
 # ...and some test data.
 n = fn -> :rand.uniform 1_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000 end
-for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n.()}"}}
+for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{i => "#{n.()}"}}
 
 # Now let's run some queries!
 # Lethe's query DSL allows you to use the names of your table attributes,
@@ -68,7 +73,7 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   |> Lethe.compile
   |> Lethe.run
 
-# Select all  fields from all records
+# Select all fields from all records
 # `Lethe.select_all` and `Lethe.limit(:all)` are the default settings.
 {:ok, all_records} =
   table
@@ -114,11 +119,26 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{n.() => "#{n
   |> Lethe.compile
   |> Lethe.run
 
+# Select all values where :integer * 2 >= 4 and :integer * 2 <= 10
 {:ok, res} =
   table
   |> Lethe.new
   |> Lethe.select(:integer)
   |> Lethe.where(:integer * 2 >= 4 and :integer * 2 <= 10)
+  |> Lethe.compile
+  |> Lethe.run
+
+# An example of a very complicated query
+{:ok, res} =
+  table
+  |> Lethe.new
+  |> Lethe.select(:integer)
+  |> Lethe.where(
+    :integer * 2 == 666
+      and is_map(:map)
+      and is_map_key(:integer, :map)
+      and map_get(:integer, :map) == :string
+  )
   |> Lethe.compile
   |> Lethe.run
 

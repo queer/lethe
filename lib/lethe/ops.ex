@@ -48,7 +48,6 @@ defmodule Lethe.Ops do
     :element,
     :hd,
     :length,
-    :map_get,
     :map_size,
     :round,
     :size,
@@ -78,6 +77,7 @@ defmodule Lethe.Ops do
     :"=/=",
     :"/=",
     :is_map_key,
+    :map_get,
   ]
 
   @constant_funcs [

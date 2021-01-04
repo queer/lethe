@@ -13,7 +13,8 @@ defmodule LetheTest do
     :mnesia.add_table_index @table, :map
 
     for i <- 1..10_000 do
-      :mnesia.dirty_write {@table, i, "#{n()}", %{i => "#{n()}"}}
+      s = n() |> Integer.to_string
+      :mnesia.dirty_write {@table, i, s, %{i => s}}
     end
 
     on_exit fn ->
@@ -223,7 +224,12 @@ defmodule LetheTest do
         @table
         |> Lethe.new
         |> Lethe.select(:integer)
-        |> Lethe.where(:integer * 2 == 666 and is_map(:map) and is_map_key(:integer, :map))
+        |> Lethe.where(
+          :integer * 2 == 666
+          and is_map(:map)
+          and is_map_key(:integer, :map)
+          and map_get(:integer, :map) == :string
+        )
         |> Lethe.compile
         |> Lethe.run
 
