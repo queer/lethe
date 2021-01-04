@@ -518,7 +518,7 @@ defmodule Lethe do
     def __rewrite_into_quotable_form(op) do
       case op do
         {op, meta, args} when is_list(meta) ->
-          {op, args}
+          {op, Enum.map(args, &Lethe.AstTransformer.__rewrite_into_quotable_form/1)}
 
         _ ->
           op

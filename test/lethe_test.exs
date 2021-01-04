@@ -217,5 +217,17 @@ defmodule LetheTest do
       assert 1 == map_size(map)
       assert Map.has_key?(map, 1)
     end
+
+    test "chaining lots of operators works" do
+      {:ok, [integer]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.where(:integer * 2 == 666 and is_map(:map) and is_map_key(:integer, :map))
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 333 == integer
+    end
   end
 end
