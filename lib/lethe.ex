@@ -6,9 +6,20 @@ defmodule Lethe do
   providing a sane API for reads, but I might add support for writes later.
 
   The default options are:
+
   - Select all fields (`Lethe.select_all`)
   - Read lock (`:read`)
   - Select all values (`Lethe.limit(:all)`)
+
+  ### Querying
+
+  Querying is started with `Lethe.new/1`. This function takes a table name as
+  its sole argument, and returns a new `Lethe.Query`. Querying is controlled
+  with:
+
+  - The fields that can be returned (`Lethe.select/2` / `Lethe.select_all/1`)
+  - The number of records to return (`Lethe.limit/2`)
+  - The specifics of how records are selected. (`Lethe.where/2`)
   """
 
   use TypedStruct
@@ -476,9 +487,9 @@ defmodule Lethe do
     end
   end
 
-  ###############
-  ## Operators ##
-  ###############
+  ###################
+  ## Where clauses ##
+  ###################
 
   @doc """
   Adds a guard to the query. Guards are roughly analogous to `WHERE` clauses in
@@ -496,48 +507,69 @@ defmodule Lethe do
   rewritten from Elixir form to Mnesia form at compile time; for example,
   Elixir's `and` operator is rewritten to an `:andalso` Mnesia guard.
 
+  However, Lethe `where` expressions differ from normal Elixir expressions in
+  one major way: You cannot use external variables directly, but instead must
+  pin them, or, in other words, use the `^` operator. For example:
+
+      i = 0
+      # ...
+      # Note the pin (`^`) operator. This wil not work as expected otherwise,
+      # and may return invalid results
+      |> Lethe.where(:value == ^i * 2)
+
   A list of all available functions can be found here:
   https://erlang.org/doc/apps/erts/match_spec.html#grammar
   """
   @spec where(__MODULE__.Query.t(), expression()) :: __MODULE__.Query.t()
   defmacro where(query, operation) do
+    # Rewrite the expression into a form that can be safely quoted, without the
+    # compiler yelling at us about it being an invalid AST.
     with {op, args} when is_atom(op) and is_list(args) <- Lethe.AstTransformer.__rewrite_into_quotable_form(operation) do
+      # Once the primary op is rewritten, rewrite the args to the primary op as
+      # well. This will recursively ensure the validity of all expressions.
       args = Enum.map args, &Lethe.AstTransformer.__rewrite_into_quotable_form/1
       quote do
+        # Rewrite the op into an Mnesia-guard-friendly form as needed.
         rewritten_op = Lethe.AstTransformer.__rewrite_op unquote(op)
+        # Transform all the args as well.
         transformed_args = Enum.map unquote(args), &Lethe.AstTransformer.__transform_op(unquote(query), &1)
+        # Apply the relevant op functions to transform the expression into its
+        # final Mnesia guard form.
         guard = apply Ops, rewritten_op, transformed_args
+        # Add it to the query's ops.
         %{unquote(query) | ops: unquote(query).ops ++ [guard]}
       end
     end
   end
 
   defmodule AstTransformer do
+    # More/less all of these functions recurse so that everything can be
+    # properly processed.
+
     alias Lethe.Ops
 
-    def __rewrite_into_quotable_form(op) do
-      case op do
-        {op, meta, args} when is_list(meta) ->
-          {op, Enum.map(args, &Lethe.AstTransformer.__rewrite_into_quotable_form/1)}
-
-        _ ->
-          op
+    def __rewrite_into_quotable_form({:^, _, [{var, meta, nil}]}) do
+      # When we're passed a pinned variable, rewrite it into the literal AST
+      # for the variable, so that it gets used correctly
+      quote do
+        unquote({var, meta, nil})
       end
     end
-
-    def __transform_op(query, op) do
-      cond do
-        is_tuple(op) ->
-          {op, args} = op
-          apply Ops, __MODULE__.__rewrite_op(op), Enum.map(args, &__MODULE__.__transform_op(query, &1))
-
-        is_atom(op) ->
-          __MODULE__.__rewrite_op op
-
-        true ->
-          op
-      end
+    def __rewrite_into_quotable_form({op, _, args}) when is_list(args) do
+      # When we run into something that has args, we need to rewrite all of
+      # them into quotable form so that they can be used properly.
+      {op, __MODULE__.__rewrite_args(args)}
     end
+    def __rewrite_into_quotable_form(op), do: op
+
+    def __rewrite_args(args) when is_list(args), do: Enum.map(args, &Lethe.AstTransformer.__rewrite_into_quotable_form/1)
+    def __rewrite_args(nil), do: nil
+
+    def __transform_op(query, {op, args}) when is_list(args) do
+      # Transform ops from Elixir form into Mnesia guard form where needed.
+      apply Ops, __MODULE__.__rewrite_op(op), Enum.map(args, &__MODULE__.__transform_op(query, &1))
+    end
+    def __transform_op(_, op), do: op
 
     def __rewrite_op(op) when is_atom(op) do
       case op do

@@ -44,7 +44,7 @@ defmodule LetheTest do
   end
 
   describe "select/2" do
-    test "it selects single fields" do
+    test "selects single fields" do
       base =
         @table
         |> Lethe.new
@@ -78,7 +78,7 @@ defmodule LetheTest do
       assert 1 == map_size(map)
     end
 
-    test "it selects adjacent fields" do
+    test "selects adjacent fields" do
       {:ok, [{int, string}]} =
         @table
         |> Lethe.new
@@ -93,7 +93,7 @@ defmodule LetheTest do
       assert String.valid?(string)
     end
 
-    test "it selects non-adjacent fields" do
+    test "selects non-adjacent fields" do
       {:ok, [{int, map}]} =
         @table
         |> Lethe.new
@@ -108,7 +108,7 @@ defmodule LetheTest do
       assert 1 == map_size(map)
     end
 
-    test "it selects many records" do
+    test "selects many records" do
       {:ok, results} =
         @table
         |> Lethe.new
@@ -120,7 +120,7 @@ defmodule LetheTest do
       assert 100 = length(results)
     end
 
-    test "it selects everything correctly" do
+    test "selects everything correctly" do
       {:ok, results} =
         @table
         |> Lethe.new
@@ -133,7 +133,7 @@ defmodule LetheTest do
   end
 
   describe "where/2" do
-    test "it handles is-functions correctly" do
+    test "handles is-functions correctly" do
       {:ok, [integer]} =
         @table
         |> Lethe.new
@@ -147,7 +147,7 @@ defmodule LetheTest do
       assert integer >= 0
     end
 
-    test "it handles logical functions correctly" do
+    test "handles logical functions correctly" do
       {:ok, [integer]} =
         @table
         |> Lethe.new
@@ -161,7 +161,7 @@ defmodule LetheTest do
       assert integer >= 0
     end
 
-    test "it handles comparison functions correctly" do
+    test "handles comparison functions correctly" do
       {:ok, [{integer, string}]} =
         @table
         |> Lethe.new
@@ -175,7 +175,7 @@ defmodule LetheTest do
       assert String.valid?(string)
     end
 
-    test "work when many operators used" do
+    test "works when many operators used" do
       {:ok, res} =
         @table
         |> Lethe.new
@@ -190,7 +190,7 @@ defmodule LetheTest do
       assert [1, 2, 3, 4, 5] == Enum.sort(res)
     end
 
-    test "it handles map_size properly" do
+    test "handles map_size properly" do
       {:ok, [map]} =
         @table
         |> Lethe.new
@@ -203,7 +203,7 @@ defmodule LetheTest do
       assert 1 == map_size(map)
     end
 
-    test "it handles is_map_key properly" do
+    test "handles is_map_key properly" do
       {:ok, [{integer, map}]} =
         @table
         |> Lethe.new
@@ -219,21 +219,46 @@ defmodule LetheTest do
       assert Map.has_key?(map, 1)
     end
 
-    test "chaining lots of operators works" do
+    test "chains lots of operators correctly" do
       {:ok, [integer]} =
         @table
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.where(
           :integer * 2 == 666
-          and is_map(:map)
-          and is_map_key(:integer, :map)
-          and map_get(:integer, :map) == :string
+            and is_map(:map)
+            and is_map_key(:integer, :map)
+            and map_get(:integer, :map) == :string
         )
         |> Lethe.compile
         |> Lethe.run
 
       assert 333 == integer
+    end
+
+    test "binds external variables correctly" do
+      i = 333
+      {:ok, [integer]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.where(:integer * 2 == ^i * 2)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 333 == integer
+
+      a = 5
+      b = 10
+      {:ok, [integer]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.where(:integer == ^a and :integer * 2 == ^b)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 5 == integer
     end
   end
 end

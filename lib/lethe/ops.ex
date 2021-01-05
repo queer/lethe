@@ -85,12 +85,15 @@ defmodule Lethe.Ops do
     :self,
   ]
 
-  # TODO: Optimise to not constantly make new mapsets
-  def is_funcs, do: MapSet.new @is_funcs
-  def logical_funcs, do: MapSet.new @logical_funcs
-  def transform_funcs, do: MapSet.new @transform_funcs
-  def operator_funcs, do: MapSet.new @operator_funcs
-  def constant_funcs, do: MapSet.new @constant_funcs
+  @all_funcs MapSet.new(
+    @is_funcs
+    ++ @logical_funcs
+    ++ @transform_funcs
+    ++ @operator_funcs
+    ++ @constant_funcs
+  )
+
+  def all_funcs, do: @all_funcs
 
   for f <- @is_funcs do
     # @spec unquote(f)(Lethe.field()) :: Lethe.matchspec_guard()

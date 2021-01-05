@@ -142,5 +142,16 @@ for i <- 1..10_000, do: :mnesia.dirty_write {table, i, "#{n.()}", %{i => "#{n.()
   |> Lethe.compile
   |> Lethe.run
 
+# Using external variables in queries
+i = 333
+
+{:ok, res} =
+  table
+  |> Lethe.new
+  |> Lethe.select(:integer)
+  |> Lethe.where(:integer * 2 == ^i * 2)
+  |> Lethe.compile
+  |> Lethe.run
+
 # See the documentation on `Lethe.where/2` for a list of all available ops
 ```
