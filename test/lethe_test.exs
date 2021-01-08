@@ -7,14 +7,14 @@ defmodule LetheTest do
   setup_all do
     :mnesia.create_schema []
     :mnesia.start()
-    :mnesia.create_table @table, [attributes: [:integer, :string, :map]]
+    :mnesia.create_table @table, [attributes: [:integer, :string, :map, :atom]]
     :mnesia.add_table_index @table, :integer
     :mnesia.add_table_index @table, :string
     :mnesia.add_table_index @table, :map
 
     for i <- 1..10_000 do
       s = n() |> Integer.to_string
-      :mnesia.dirty_write {@table, i, s, %{i => s}}
+      :mnesia.dirty_write {@table, i, s, %{i => s}, :"#{i}"}
     end
 
     on_exit fn ->
@@ -35,12 +35,13 @@ defmodule LetheTest do
       |> Lethe.compile
       |> Lethe.run
 
-    {integer, string, map} = res
+    {integer, string, map, atom} = res
     assert is_integer(integer)
     assert integer >= 0
     assert String.valid?(string)
     assert is_map(map)
     assert 1 == map_size(map)
+    assert is_atom(atom)
   end
 
   describe "select/2" do
@@ -255,6 +256,18 @@ defmodule LetheTest do
         |> Lethe.new
         |> Lethe.select(:integer)
         |> Lethe.where(:integer == ^a and :integer * 2 == ^b)
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 5 == integer
+    end
+
+    test "&-binds atom literals correctly" do
+      {:ok, [integer]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.where(:atom == &:"5")
         |> Lethe.compile
         |> Lethe.run
 

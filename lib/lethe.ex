@@ -176,6 +176,10 @@ defmodule Lethe do
 
   @mnesia_specified_vars :"$$"
 
+  ##########################
+  ## Using macro for help ##
+  ##########################
+
   #############
   ## Structs ##
   #############
@@ -458,13 +462,27 @@ defmodule Lethe do
       |> Enum.reduce({MapSet.new(), []}, fn elem, {vars, out} ->
         cond do
           is_atom(elem) ->
-            try do
-              bind = field_to_var query, elem
-              {MapSet.put(vars, bind), out ++ [bind]}
-            rescue
-              _ ->
-                {vars, out ++ [elem]}
+            elem
+            |> Atom.to_string
+            |> String.starts_with?("__lethe_literal")
+            |> if do
+              literal =
+                elem
+                |> Atom.to_string
+                |> String.replace("__lethe_literal_", "")
+                |> String.to_atom
+
+              {vars, out ++ [literal]}
+            else
+              try do
+                bind = field_to_var query, elem
+                {MapSet.put(vars, bind), out ++ [bind]}
+              rescue
+                _ ->
+                  {vars, out ++ [elem]}
+              end
             end
+
 
           is_tuple(elem) ->
             {inner_vars, inner_out} = search_guard query, elem
@@ -553,6 +571,12 @@ defmodule Lethe do
       # for the variable, so that it gets used correctly
       quote do
         unquote({var, meta, nil})
+      end
+    end
+    def __rewrite_into_quotable_form({:&, _meta, [atom]}) do
+      # When we're passed an &variable, rewrite it into the literal atom
+      quote do
+        unquote(String.to_atom("__lethe_literal_" <> Atom.to_string(atom)))
       end
     end
     def __rewrite_into_quotable_form({op, _, args}) when is_list(args) do

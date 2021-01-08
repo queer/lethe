@@ -153,5 +153,14 @@ i = 333
   |> Lethe.compile
   |> Lethe.run
 
+# Using atom literals in queries
+{:ok, res} =
+  table
+  |> Lethe.new
+  |> Lethe.select(:atom)
+  |> Lethe.where(:atom == &:atom)
+  |> Lethe.compile
+  |> Lethe.run
+
 # See the documentation on `Lethe.where/2` for a list of all available ops
 ```
