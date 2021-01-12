@@ -274,4 +274,18 @@ defmodule LetheTest do
       assert 5 == integer
     end
   end
+
+  describe "where_raw/2" do
+    test "allows raw matchspecs properly" do
+      {:ok, [integer]} =
+        @table
+        |> Lethe.new
+        |> Lethe.select(:integer)
+        |> Lethe.where_raw({:==, :integer, 5})
+        |> Lethe.compile
+        |> Lethe.run
+
+      assert 5 == integer
+    end
+  end
 end

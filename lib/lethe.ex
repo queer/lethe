@@ -509,6 +509,10 @@ defmodule Lethe do
   ## Where clauses ##
   ###################
 
+  def where_raw(%__MODULE__.Query{ops: ops} = query, raw) do
+    %{query | ops: ops ++ [raw]}
+  end
+
   @doc """
   Adds a guard to the query. Guards are roughly analogous to `WHERE` clauses in
   SQL, but can operate on all the Elixir data types. Instead of needing to
